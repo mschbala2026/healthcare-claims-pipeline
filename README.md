@@ -486,6 +486,8 @@ git push origin feature/add-readmission-feature
 ---
 
 ## References
+# - See `SCHEMA_EVOLUTION_EXAMPLE.md` for handling schema changes
+# - See `SERVING_STRATEGY.md` for online/nearline serving patterns
 
 ### CMS Data
 
