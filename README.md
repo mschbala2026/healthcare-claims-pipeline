@@ -158,6 +158,7 @@ feature_pipeline/
 │   └── processed/               # Output features (gitignored)
 │
 ├── SCHEMA_EVOLUTION_EXAMPLE.md
+├── ASSUMPTIONS_AND_IMPROVEMENTS.md
 ├── SCHEMA_STRATEGY.md
 ├── DESIGN_NOTES.md              # Technical design & leakage analysis
 ├── README.md                     # This file
