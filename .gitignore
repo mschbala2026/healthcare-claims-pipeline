@@ -30,6 +30,7 @@ wheels/
 .pytest_cache/
 .coverage
 htmlcov/
+data/raw/*.csv
 data/processed/*.parquet
 *.csv.bak
 *.log
