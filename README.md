@@ -63,18 +63,26 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Download Data
+### 2. Prepare Data Files
 
-Download from CMS public site:
-- **Beneficiary Summary**: https://www.cms.gov/Research-Statistics-Data-and-Systems/Downloadable-Public-Use-Files/SynPUFs/DESample01
-- **Inpatient Claims**: Same URL
+**Note:** Sample data is NOT included in the repository. CSV files are in `.gitignore` to keep the repo small.
 
-Place files in `data/raw/`:
-```
-data/raw/
-├── DE1_0_2008_Beneficiary_Summary_File_Sample_1.csv
-└── DE1_0_2008_to_2010_Inpatient_Claims_Sample_1.csv
-```
+#### Option A: Download CMS DE-SynPUF Data (Recommended)
+
+Download from official CMS public site:
+- Visit: https://www.cms.gov/Research-Statistics-Data-and-Systems/Downloadable-Public-Use-Files/SynPUFs/DESample01
+- Download: **Sample 1** files for **2008-2010**
+- You'll receive 2 files
+
+#### Option B: Use Your Own Claims Data
+
+If you have your own healthcare claims data, ensure it matches the schema in:
+- `contracts/beneficiary_contract.yaml` (32 required columns)
+- `contracts/inpatient_contract.yaml` (33 required columns)
+
+#### Place Files in `data/raw/`
+
+After downloading/preparing data, place the files in `data/raw/` with these exact names:
 
 ### 3. Generate Features
 
@@ -129,6 +137,25 @@ pytest tests/ --cov=features --cov=validation --cov-report=html
 ```
 
 ---
+
+### Using Different Data
+
+The pipeline works with any healthcare claims data that matches our schema contracts:
+
+**Schema Contracts** (define required columns, types, and validation rules):
+- See `contracts/beneficiary_contract.yaml` for beneficiary table schema
+- See `contracts/inpatient_contract.yaml` for inpatient claims table schema
+
+**To use different data:**
+1. Map your columns to match our schema
+2. Place files in `data/raw/` with expected names
+3. Run pipeline with `--feature-date` appropriate for your data
+4. Pipeline will validate schema match before feature generation
+
+**Note:** If your data structure differs significantly, you may need to:
+- Update the contracts to match your schema
+- Modify `features/feature_generator.py` aggregation logic
+- Ensure temporal columns exist (admission dates, etc.)
 
 ## Architecture
 
