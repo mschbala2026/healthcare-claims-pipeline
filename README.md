@@ -30,7 +30,15 @@ This pipeline generates historical features from CMS 2008-2010 DE-SynPUF synthet
 - **Beneficiaries**: ~2.3M per year
 - **Inpatient Claims**: ~500k-548k per year
 - **Time Range**: 2008-01-01 to 2010-12-31
+- **Feature Date**: 2009-06-30 (middle of data; 18 months history, 7 months labels available)
 - **Note**: Synthetic data for development; NOT suitable for real Medicare research
+
+**Data Period Constraint:**
+- **Data available:** January 1, 2008 → December 31, 2010
+- **Feature date chosen:** 2009-06-30 (middle of data period)
+- **Historical window:** 2008-01-01 to 2009-06-29 (18 months available)
+- **Prediction window:** 2009-06-30 to 2010-12-31 (limited by data availability)
+- **Rationale:** Balanced choice—sufficient history (18 months) + full 90-day label window
 
 ---
 
@@ -260,6 +268,21 @@ Features (Parquet)
 - `computed_at`: UTC timestamp when features were generated
 
 ---
+
+## Data Period & Feature Date Context
+
+### CMS 2008-2010 Data Constraint
+
+This pipeline uses the public CMS DE-SynPUF 2008-2010 release:
+
+- **Data span:** January 1, 2008 → December 31, 2010 (3 complete years)
+- **Beneficiaries:** 2.3M individuals per year
+- **Inpatient claims:** 500k-548k admissions per year
+- **Feature date chosen:** 2009-06-30 (middle of available data)
+
+### Temporal Semantics
+
+**Windows created from this data:**
 
 ## Point-in-Time Correctness
 
