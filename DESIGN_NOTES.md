@@ -253,6 +253,24 @@ result['has_claim_30d'] = result['has_claim_30d'].fillna(0).astype(int)
 
 ---
 
+## Data Period & Feature Date Selection
+
+### CMS 2008-2010 Data: Context & Constraints
+
+This pipeline uses the **CMS DE-SynPUF 2008-2010 public release**:
+
+- **Data span:** January 1, 2008 → December 31, 2010 (3 full years)
+- **Beneficiaries:** 2.3M individuals
+- **Inpatient claims:** 500k+ admissions
+- **Source:** Fully synthetic, de-identified public domain data
+
+**Why This Data?** The assignment specifies "Use CMS DE-SynPUF data," and this is the standard public release available without special access.
+
+### Feature Date: 2009-06-30 (Critical Choice)
+
+The feature_date parameter determines the temporal split between features and labels:
+---
+
 ## Leakage Prevention Checklist
 
 Use this checklist when adding new features:
