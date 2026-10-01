@@ -1,4 +1,4 @@
-# CMS Inpatient Feature Pipeline
+# Healthcare claims feature Pipeline
 
 Production-ready feature engineering pipeline for Medicare inpatient claim prediction, emphasizing point-in-time correctness and leakage prevention.
 
@@ -39,12 +39,16 @@ This pipeline generates historical features from CMS 2008-2010 DE-SynPUF synthet
 ### 1. Setup
 
 ```bash
-# Clone repository
-git clone <repo-url>
-cd feature_pipeline
+# Clone repository  - in vscode open terminal and type below commands
+git clone <https://github.com/mschbala2026/healthcare-claims-pipeline>
+cd healthcare-claims-pipeline
 
-# Create virtual environment
-python3.9 -m venv venv
+# Note: Python should be installed on code running machine
+# Create virtual environment 
+python -m venv venv
+#in windows type below command to activate virtual environment
+venv\Scripts\activate
+#in mac type below command to activate virtual environment
 source venv/bin/activate
 
 # Install dependencies

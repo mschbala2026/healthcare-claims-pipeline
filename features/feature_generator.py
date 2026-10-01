@@ -57,8 +57,20 @@ class FeatureGenerator:
         """Parse date in YYYYMMDD or YYYY-MM-DD format"""
         if isinstance(date_str, pd.Timestamp):
             return date_str
-        if len(str(date_str).replace('-', '')) == 8:
-            return pd.to_datetime(str(date_str), format='%Y%m%d')
+        
+        date_str = str(date_str).strip()
+        
+        # Remove hyphens if present, then parse
+        clean_date = date_str.replace('-', '')
+        
+        # If it's 8 digits, parse as YYYYMMDD
+        if len(clean_date) == 8:
+            try:
+                return pd.to_datetime(clean_date, format='%Y%m%d')
+            except ValueError:
+                pass
+        
+        # Otherwise, let pandas infer format
         return pd.to_datetime(date_str)
     
     def _validate_feature_date(self, df: pd.DataFrame, feature_date: str, 
@@ -117,6 +129,11 @@ class FeatureGenerator:
         """
         self._log("Computing beneficiary features...")
         
+        # Handle empty beneficiary data
+        if bene_df.empty or 'DESYNPUF_ID' not in bene_df.columns:
+            self._log("  No beneficiary data")
+            return pd.DataFrame(columns=['DESYNPUF_ID'])
+        
         result = pd.DataFrame()
         result['DESYNPUF_ID'] = bene_df['DESYNPUF_ID']
         
@@ -128,21 +145,22 @@ class FeatureGenerator:
         ).round(1)
         
         # Demographics
-        result['sex_male'] = (bene_df['BENE_SEX_IDENT_CD'] == 1).astype(int)
-        result['race_white'] = (bene_df['BENE_RACE_CD'] == 1).astype(int)
+        result['sex_male'] = (bene_df['BENE_SEX_IDENT_CD'] == 1).astype(int) if 'BENE_SEX_IDENT_CD' in bene_df.columns else 0
+        result['race_white'] = (bene_df['BENE_RACE_CD'] == 1).astype(int) if 'BENE_RACE_CD' in bene_df.columns else 0
         
         # Chronic conditions (1=Yes, 2=No in CMS data)
-        result['has_diabetes'] = (bene_df['SP_DIABETES'] == 1).astype(int)
-        result['has_chf'] = (bene_df['SP_CHF'] == 1).astype(int)
-        result['has_ischemic_heart_disease'] = (bene_df['SP_ISCHMCHT'] == 1).astype(int)
-        result['has_copd'] = (bene_df['SP_COPD'] == 1).astype(int)
-        result['has_chronic_kidney_disease'] = (bene_df['SP_CHRNKIDN'] == 1).astype(int)
-        result['has_stroke_or_tia'] = (bene_df['SP_STRKETIA'] == 1).astype(int)
-        result['has_depression'] = (bene_df['SP_DEPRESSN'] == 1).astype(int)
-        result['has_cancer'] = (bene_df['SP_CNCR'] == 1).astype(int)
-        result['has_osteoporosis'] = (bene_df['SP_OSTEOPRS'] == 1).astype(int)
-        result['has_ra_or_oa'] = (bene_df['SP_RA_OA'] == 1).astype(int)
-        result['has_alzheimer'] = (bene_df['SP_ALZHDMTA'] == 1).astype(int)
+        # Handle missing columns gracefully - default to 0 (no condition) if missing
+        result['has_diabetes'] = (bene_df['SP_DIABETES'] == 1).astype(int) if 'SP_DIABETES' in bene_df.columns else 0
+        result['has_chf'] = (bene_df['SP_CHF'] == 1).astype(int) if 'SP_CHF' in bene_df.columns else 0
+        result['has_ischemic_heart_disease'] = (bene_df['SP_ISCHMCHT'] == 1).astype(int) if 'SP_ISCHMCHT' in bene_df.columns else 0
+        result['has_copd'] = (bene_df['SP_COPD'] == 1).astype(int) if 'SP_COPD' in bene_df.columns else 0
+        result['has_chronic_kidney_disease'] = (bene_df['SP_CHRNKIDN'] == 1).astype(int) if 'SP_CHRNKIDN' in bene_df.columns else 0
+        result['has_stroke_or_tia'] = (bene_df['SP_STRKETIA'] == 1).astype(int) if 'SP_STRKETIA' in bene_df.columns else 0
+        result['has_depression'] = (bene_df['SP_DEPRESSN'] == 1).astype(int) if 'SP_DEPRESSN' in bene_df.columns else 0
+        result['has_cancer'] = (bene_df['SP_CNCR'] == 1).astype(int) if 'SP_CNCR' in bene_df.columns else 0
+        result['has_osteoporosis'] = (bene_df['SP_OSTEOPRS'] == 1).astype(int) if 'SP_OSTEOPRS' in bene_df.columns else 0
+        result['has_ra_or_oa'] = (bene_df['SP_RA_OA'] == 1).astype(int) if 'SP_RA_OA' in bene_df.columns else 0
+        result['has_alzheimer'] = (bene_df['SP_ALZHDMTA'] == 1).astype(int) if 'SP_ALZHDMTA' in bene_df.columns else 0
         
         # Count chronic conditions
         chronic_cols = ['has_diabetes', 'has_chf', 'has_ischemic_heart_disease', 
@@ -151,9 +169,9 @@ class FeatureGenerator:
                        'has_ra_or_oa', 'has_alzheimer']
         result['num_chronic_conditions'] = result[chronic_cols].sum(axis=1)
         
-        # Coverage months
-        result['part_a_coverage_months'] = bene_df['BENE_HI_CVRAGE_TOT_MONS'].astype(int)
-        result['part_b_coverage_months'] = bene_df['BENE_SMI_CVRAGE_TOT_MONS'].astype(int)
+        # Coverage months - handle missing columns
+        result['part_a_coverage_months'] = bene_df['BENE_HI_CVRAGE_TOT_MONS'].astype(int) if 'BENE_HI_CVRAGE_TOT_MONS' in bene_df.columns else 12
+        result['part_b_coverage_months'] = bene_df['BENE_SMI_CVRAGE_TOT_MONS'].astype(int) if 'BENE_SMI_CVRAGE_TOT_MONS' in bene_df.columns else 12
         
         self._log(f"  ✓ Computed {len(result)} beneficiary feature sets")
         return result
@@ -175,6 +193,11 @@ class FeatureGenerator:
         """
         self._log("Computing inpatient claims features...")
         
+        # Handle empty dataframe - return empty with proper columns for merge
+        if claims_df.empty or 'CLM_ADMSN_DT' not in claims_df.columns:
+            self._log("  No inpatient claims data")
+            return pd.DataFrame(columns=['DESYNPUF_ID'])
+        
         feature_dt = self._parse_date(feature_date)
         
         # Filter to only claims before feature_date
@@ -186,6 +209,12 @@ class FeatureGenerator:
         
         # Extract admission dates for windowing
         claims_before_ft = claims_before_ft.copy()
+        
+        # If no claims before feature_date, return empty result with proper columns
+        if claims_before_ft.empty:
+            self._log("  No claims before feature date")
+            return pd.DataFrame(columns=['DESYNPUF_ID'])
+        
         adm_dates = pd.to_datetime(
             claims_before_ft['CLM_ADMSN_DT'], 
             format='%Y%m%d', 
@@ -243,16 +272,20 @@ class FeatureGenerator:
         result['avg_cost_per_claim_90d'] = result['avg_cost_per_claim_90d'].fillna(0)
         result['avg_los_90d'] = result['avg_los_90d'].fillna(0)
         
-        # Beneficiary liability (deductible + coinsurance)
-        liability = claims_90d.groupby('DESYNPUF_ID').agg({
-            'NCH_BENE_IP_DDCTBL_AMT': 'sum',
-            'NCH_BENE_PTA_COINSRNC_LBLTY_AM': 'sum'
-        })
-        liability['beneficiary_liability_90d'] = (
-            liability['NCH_BENE_IP_DDCTBL_AMT'] + liability['NCH_BENE_PTA_COINSRNC_LBLTY_AM']
-        )
-        liability = liability[['beneficiary_liability_90d']].reset_index()
-        result = result.merge(liability, on='DESYNPUF_ID', how='left')
+        # Beneficiary liability (deductible + coinsurance) - handle missing columns
+        if 'NCH_BENE_IP_DDCTBL_AMT' in claims_90d.columns and 'NCH_BENE_PTA_COINSRNC_LBLTY_AM' in claims_90d.columns:
+            liability = claims_90d.groupby('DESYNPUF_ID').agg({
+                'NCH_BENE_IP_DDCTBL_AMT': 'sum',
+                'NCH_BENE_PTA_COINSRNC_LBLTY_AM': 'sum'
+            })
+            liability['beneficiary_liability_90d'] = (
+                liability['NCH_BENE_IP_DDCTBL_AMT'] + liability['NCH_BENE_PTA_COINSRNC_LBLTY_AM']
+            )
+            liability = liability[['beneficiary_liability_90d']].reset_index()
+            result = result.merge(liability, on='DESYNPUF_ID', how='left')
+        else:
+            result['beneficiary_liability_90d'] = 0
+        
         result['beneficiary_liability_90d'] = result['beneficiary_liability_90d'].fillna(0)
         
         self._log(f"  ✓ Computed {len(result)} inpatient feature sets")
@@ -271,6 +304,11 @@ class FeatureGenerator:
         """
         self._log("Computing diagnosis features...")
         
+        # Handle empty dataframe or missing date column
+        if claims_df.empty or 'CLM_ADMSN_DT' not in claims_df.columns:
+            self._log("  No diagnosis data available")
+            return pd.DataFrame(columns=['DESYNPUF_ID'])
+        
         # Filter to claims before feature_date
         claims_before_ft = self._apply_date_filter(
             claims_df,
@@ -278,6 +316,10 @@ class FeatureGenerator:
             feature_date=feature_date,
             max_days_back=90
         )
+        
+        # If no claims, return empty with proper columns
+        if claims_before_ft.empty:
+            return pd.DataFrame(columns=['DESYNPUF_ID'])
         
         result = pd.DataFrame({'DESYNPUF_ID': claims_before_ft['DESYNPUF_ID'].unique()})
         
