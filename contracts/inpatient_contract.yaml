@@ -1,0 +1,334 @@
+# DATA CONTRACT: CMS Inpatient Claims Table
+# Purpose: Define schema, quality rules, and versioning for inpatient claims
+# Owner: ML Engineering Team
+# Last Updated: 2024-10-01
+
+name: "CMS Inpatient Claims"
+owner: "ML Engineering"
+version: "1.0.0"
+created_date: "2024-10-01"
+historical_start_date: "2008-01-01"
+
+description: |
+  Hospital inpatient admission claims including dates, diagnoses,
+  procedures, costs, and provider information.
+  One row per inpatient claim (max 2 segments per claim).
+
+source:
+  system: "CMS DE-SynPUF"
+  update_frequency: "Monthly (historical)"
+  data_lag_days: 0
+  note: "Synthetic data for development"
+
+# Schema Definition  
+schema:
+  columns:
+    # IDENTIFIERS
+    - name: DESYNPUF_ID
+      type: string
+      nullable: false
+      description: "Unique beneficiary identifier"
+      length: 16
+      example: "00013D2EFD8E45D1"
+      foreign_key: "beneficiary.DESYNPUF_ID"
+
+    - name: CLM_ID
+      type: string
+      nullable: false
+      description: "Unique claim identifier"
+      length: 15
+      example: "123456789012345"
+
+    - name: SEGMENT
+      type: integer
+      nullable: false
+      description: "Claim segment number (1-2 for multi-segment claims)"
+      valid_values: [1, 2]
+      example: 1
+
+    - name: PRVDR_NUM
+      type: string
+      nullable: false
+      description: "Provider (hospital) identification number"
+      length: 6
+      example: "260001"
+      note: "Synthetic number for privacy protection"
+
+    # DATES (All YYYYMMDD format)
+    - name: CLM_FROM_DT
+      type: date
+      nullable: false
+      description: "Claim start date (first day of billing period)"
+      example: "20090615"
+      constraint: "CLM_FROM_DT <= CLM_THRU_DT"
+
+    - name: CLM_THRU_DT
+      type: date
+      nullable: false
+      description: "Claim end date (last day of billing period)"
+      example: "20090620"
+      constraint: "CLM_THRU_DT >= CLM_FROM_DT"
+
+    - name: CLM_ADMSN_DT
+      type: date
+      nullable: false
+      description: "Hospital admission date (when patient entered)"
+      example: "20090615"
+      constraint: "CLM_ADMSN_DT <= NCH_BENE_DSCHRG_DT"
+
+    - name: NCH_BENE_DSCHRG_DT
+      type: date
+      nullable: false
+      description: "Discharge date (when patient left hospital)"
+      example: "20090620"
+      constraint: "NCH_BENE_DSCHRG_DT >= CLM_ADMSN_DT"
+
+    # COSTS & PAYMENTS
+    - name: CLM_PMT_AMT
+      type: float
+      nullable: false
+      description: "Total claim payment amount from Medicare"
+      example: 5000.00
+      note: "Can be negative for claim reversals/adjustments"
+
+    - name: NCH_PRMRY_PYR_CLM_PD_AMT
+      type: float
+      nullable: false
+      description: "Primary payer claim paid amount"
+      min_value: 0
+      example: 0.00
+
+    - name: CLM_PASS_THRU_PER_DIEM_AMT
+      type: float
+      nullable: false
+      description: "Pass-through per diem amount (educational costs, etc.)"
+      min_value: 0
+      example: 0.00
+
+    - name: NCH_BENE_IP_DDCTBL_AMT
+      type: float
+      nullable: false
+      description: "Beneficiary inpatient deductible amount"
+      min_value: 0
+      example: 1000.00
+
+    - name: NCH_BENE_PTA_COINSRNC_LBLTY_AM
+      type: float
+      nullable: false
+      description: "Beneficiary Part A coinsurance liability amount"
+      min_value: 0
+      example: 250.00
+
+    - name: NCH_BENE_BLOOD_DDCTBL_LBLTY_AM
+      type: float
+      nullable: false
+      description: "Beneficiary blood deductible liability amount"
+      min_value: 0
+      example: 0.00
+
+    # UTILIZATION
+    - name: CLM_UTLZTN_DAY_CNT
+      type: integer
+      nullable: false
+      description: "Covered days of care (length of stay)"
+      min_value: 1
+      example: 5
+      constraint: "Must be >= 1 (zero-day stays removed)"
+
+    - name: CLM_DRG_CD
+      type: string
+      nullable: false
+      description: "Diagnosis Related Group code (for PPS payment)"
+      length: 3
+      example: "291"
+      note: "Classification for hospital reimbursement, not patient severity"
+
+    # CLINICAL DATA
+    - name: ADMTNG_ICD9_DGNS_CD
+      type: string
+      nullable: true
+      description: "Admitting (principal) diagnosis code (ICD-9-CM)"
+      length: 5
+      example: "42789"
+
+    - name: ICD9_DGNS_CD_1
+      type: string
+      nullable: true
+      description: "Primary diagnosis code (ICD-9-CM)"
+      length: 5
+      example: "42789"
+
+    - name: ICD9_DGNS_CD_2
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 2 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_3
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 3 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_4
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 4 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_5
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 5 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_6
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 6 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_7
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 7 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_8
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 8 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_9
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 9 (ICD-9-CM)"
+      length: 5
+      
+    - name: ICD9_DGNS_CD_10
+      type: string
+      nullable: true
+      description: "Secondary diagnosis code 10 (ICD-9-CM)"
+      length: 5
+
+    - name: ICD9_PRCDR_CD_1
+      type: string
+      nullable: true
+      description: "Procedure code 1 (ICD-9-CM)"
+      length: 5
+      example: "3721"
+
+    - name: ICD9_PRCDR_CD_2
+      type: string
+      nullable: true
+      description: "Procedure code 2 (ICD-9-CM)"
+      length: 5
+
+    - name: ICD9_PRCDR_CD_3
+      type: string
+      nullable: true
+      description: "Procedure code 3 (ICD-9-CM)"
+      length: 5
+
+    - name: ICD9_PRCDR_CD_4
+      type: string
+      nullable: true
+      description: "Procedure code 4 (ICD-9-CM)"
+      length: 5
+
+    - name: ICD9_PRCDR_CD_5
+      type: string
+      nullable: true
+      description: "Procedure code 5 (ICD-9-CM)"
+      length: 5
+
+    - name: ICD9_PRCDR_CD_6
+      type: string
+      nullable: true
+      description: "Procedure code 6 (ICD-9-CM)"
+      length: 5
+
+    # HCPCS CODES (Revenue center codes, up to 45)
+    - name: HCPCS_CD_1
+      type: string
+      nullable: true
+      description: "HCPCS revenue center code 1"
+      length: 5
+
+    # (HCPCS_CD_2 through HCPCS_CD_45 follow same pattern)
+    # Abbreviated for brevity in this example
+
+    # PHYSICIANS
+    - name: AT_PHYSN_NPI
+      type: string
+      nullable: true
+      description: "Attending physician National Provider Identifier"
+      length: 10
+      example: "1234567890"
+      note: "Synthetic NPI for privacy protection"
+
+    - name: OP_PHYSN_NPI
+      type: string
+      nullable: true
+      description: "Operating physician National Provider Identifier"
+      length: 10
+      note: "Synthetic NPI for privacy protection"
+
+    - name: OT_PHYSN_NPI
+      type: string
+      nullable: true
+      description: "Other physician National Provider Identifier"
+      length: 10
+      note: "Synthetic NPI for privacy protection"
+
+# Data Quality Rules
+quality_rules:
+  - name: "No null in required columns"
+    rule: "DESYNPUF_ID, CLM_ID, CLM_FROM_DT, CLM_THRU_DT must be non-NULL"
+    severity: "CRITICAL"
+
+  - name: "Date ordering"
+    rule: "CLM_FROM_DT <= CLM_THRU_DT AND CLM_ADMSN_DT <= NCH_BENE_DSCHRG_DT"
+    severity: "CRITICAL"
+
+  - name: "Positive utilization days"
+    rule: "CLM_UTLZTN_DAY_CNT must be >= 1"
+    severity: "CRITICAL"
+
+  - name: "Non-negative costs"
+    rule: "All cost amounts (except CLM_PMT_AMT) must be >= 0"
+    severity: "WARNING"
+    note: "CLM_PMT_AMT can be negative for reversals"
+
+  - name: "No future dates"
+    rule: "All dates must be <= current date at validation time"
+    severity: "CRITICAL"
+
+  - name: "Valid diagnosis codes"
+    rule: "ICD9_DGNS_CD_* must be empty or valid 5-digit ICD-9 code"
+    severity: "WARNING"
+
+  - name: "Realistic date ranges"
+    rule: "All dates between 2008-01-01 and 2010-12-31"
+    severity: "WARNING"
+
+  - name: "At most 2 segments per claim"
+    rule: "SEGMENT value must be 1 or 2"
+    severity: "CRITICAL"
+
+# Change Management
+version_history:
+  - version: "1.0.0"
+    date: "2024-10-01"
+    changes: "Initial schema definition"
+    breaking: false
+
+notification_policy:
+  breaking_changes_notice_days: 30
+  new_nullable_columns_notice_days: 0
+  deprecation_period_days: 14
+
+contacts:
+  owner_email: "ml-engineering@example.com"
+  data_engineer: "data-eng@example.com"

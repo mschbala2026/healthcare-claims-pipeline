@@ -1,0 +1,328 @@
+# DATA CONTRACT: CMS Beneficiary Summary Table
+# Purpose: Define schema, quality rules, and versioning for beneficiary data
+# Owner: ML Engineering Team
+# Last Updated: 2024-10-01
+
+name: "CMS Beneficiary Summary"
+owner: "ML Engineering"
+version: "1.0.0"
+created_date: "2024-10-01"
+historical_start_date: "2008-01-01"
+
+description: |
+  Medicare beneficiary annual summary data including demographics, 
+  enrollment information, chronic conditions, and annual cost rollups.
+  One row per beneficiary per year.
+
+source:
+  system: "CMS DE-SynPUF"
+  update_frequency: "Annual"
+  data_lag_days: 0
+  note: "Synthetic data for development; real data would have 90-180 day lag"
+
+# Schema Definition
+schema:
+  columns:
+    # IDENTIFIERS
+    - name: DESYNPUF_ID
+      type: string
+      nullable: false
+      description: "Unique beneficiary identifier (cryptographic hash)"
+      length: 16
+      example: "00013D2EFD8E45D1"
+      valid_values: null
+      primary_key: true
+
+    # DEMOGRAPHICS & VITAL
+    - name: BENE_BIRTH_DT
+      type: date
+      nullable: false
+      description: "Date of birth (YYYYMMDD format)"
+      example: "19230501"
+      min_value: "1900-01-01"
+      max_value: "2008-12-31"
+
+    - name: BENE_DEATH_DT
+      type: date
+      nullable: true
+      description: "Date of death (NULL if alive as of year-end)"
+      example: "20080315"
+      note: "Only populate if beneficiary died in or before the year"
+
+    - name: BENE_SEX_IDENT_CD
+      type: integer
+      nullable: false
+      description: "Beneficiary sex"
+      valid_values: [1, 2]
+      value_meanings:
+        1: "Male"
+        2: "Female"
+      example: 1
+
+    - name: BENE_RACE_CD
+      type: integer
+      nullable: false
+      description: "Beneficiary race"
+      valid_values: [1, 2, 3, 5]
+      value_meanings:
+        1: "White"
+        2: "Black"
+        3: "Other"
+        5: "Hispanic"
+      example: 1
+
+    # GEOGRAPHIC
+    - name: SP_STATE_CODE
+      type: string
+      nullable: false
+      description: "State code (SSA format, 01-54)"
+      length: 2
+      example: "26"
+      valid_values: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]
+
+    - name: BENE_COUNTY_CD
+      type: string
+      nullable: false
+      description: "County code (SSA format)"
+      length: 3
+      example: "950"
+
+    # ENROLLMENT (COVERAGE MONTHS)
+    - name: BENE_HI_CVRAGE_TOT_MONS
+      type: integer
+      nullable: false
+      description: "Total months of Part A (Hospital Insurance) coverage"
+      min_value: 0
+      max_value: 12
+      example: 12
+
+    - name: BENE_SMI_CVRAGE_TOT_MONS
+      type: integer
+      nullable: false
+      description: "Total months of Part B (Supplementary Medical) coverage"
+      min_value: 0
+      max_value: 12
+      example: 12
+
+    - name: BENE_HMO_CVRAGE_TOT_MONS
+      type: integer
+      nullable: false
+      description: "Total months of HMO coverage"
+      min_value: 0
+      max_value: 12
+      example: 0
+
+    - name: PLAN_CVRG_MOS_NUM
+      type: string
+      nullable: false
+      description: "Total months of Part D (Prescription Drug) plan coverage"
+      length: 2
+      valid_values: ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+      example: "12"
+
+    # CHRONIC CONDITIONS (Binary Flags)
+    - name: SP_ALZHDMTA
+      type: integer
+      nullable: false
+      description: "Alzheimer's or related dementia (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_CHF
+      type: integer
+      nullable: false
+      description: "Heart Failure (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_CHRNKIDN
+      type: integer
+      nullable: false
+      description: "Chronic Kidney Disease (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_CNCR
+      type: integer
+      nullable: false
+      description: "Cancer (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_COPD
+      type: integer
+      nullable: false
+      description: "Chronic Obstructive Pulmonary Disease (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_DEPRESSN
+      type: integer
+      nullable: false
+      description: "Depression (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_DIABETES
+      type: integer
+      nullable: false
+      description: "Diabetes (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 1
+
+    - name: SP_ISCHMCHT
+      type: integer
+      nullable: false
+      description: "Ischemic Heart Disease (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 1
+
+    - name: SP_OSTEOPRS
+      type: integer
+      nullable: false
+      description: "Osteoporosis (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_RA_OA
+      type: integer
+      nullable: false
+      description: "Rheumatoid Arthritis / Osteoarthritis (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: SP_STRKETIA
+      type: integer
+      nullable: false
+      description: "Stroke / Transient Ischemic Attack (1=Yes, 2=No)"
+      valid_values: [1, 2]
+      example: 2
+
+    - name: BENE_ESRD_IND
+      type: string
+      nullable: false
+      description: "End Stage Renal Disease indicator"
+      valid_values: ["0", "Y"]
+      value_meanings:
+        "0": "No ESRD"
+        "Y": "Has ESRD"
+      example: "0"
+
+    # ANNUAL COST ROLLUPS (Medicare Part A/B)
+    - name: MEDREIMB_IP
+      type: float
+      nullable: false
+      description: "Annual inpatient Medicare reimbursement (dollars)"
+      min_value: 0
+      example: 2500.50
+
+    - name: BENRES_IP
+      type: float
+      nullable: false
+      description: "Annual inpatient beneficiary responsibility (dollars)"
+      min_value: 0
+      example: 250.00
+
+    - name: PPPYMT_IP
+      type: float
+      nullable: false
+      description: "Annual inpatient primary payer reimbursement (dollars)"
+      min_value: 0
+      example: 0.00
+
+    - name: MEDREIMB_OP
+      type: float
+      nullable: false
+      description: "Annual outpatient Medicare reimbursement (dollars)"
+      min_value: 0
+      example: 625.00
+
+    - name: BENRES_OP
+      type: float
+      nullable: false
+      description: "Annual outpatient beneficiary responsibility (dollars)"
+      min_value: 0
+      example: 125.00
+
+    - name: PPPYMT_OP
+      type: float
+      nullable: false
+      description: "Annual outpatient primary payer reimbursement (dollars)"
+      min_value: 0
+      example: 0.00
+
+    - name: MEDREIMB_CAR
+      type: float
+      nullable: false
+      description: "Annual carrier (physician) Medicare reimbursement (dollars)"
+      min_value: 0
+      example: 1163.00
+
+    - name: BENRES_CAR
+      type: float
+      nullable: false
+      description: "Annual carrier beneficiary responsibility (dollars)"
+      min_value: 0
+      example: 329.00
+
+    - name: PPPYMT_CAR
+      type: float
+      nullable: false
+      description: "Annual carrier primary payer reimbursement (dollars)"
+      min_value: 0
+      example: 18.66
+
+# Data Quality Rules
+quality_rules:
+  - name: "No null in required columns"
+    rule: "All columns except BENE_DEATH_DT must be non-NULL"
+    severity: "CRITICAL"
+    test_type: "null_check"
+
+  - name: "Valid death dates"
+    rule: "BENE_DEATH_DT must be NULL or <= end of year"
+    severity: "CRITICAL"
+    test_type: "date_range"
+
+  - name: "Non-negative costs"
+    rule: "All cost columns (MEDREIMB_*, BENRES_*, PPPYMT_*) must be >= 0"
+    severity: "CRITICAL"
+    test_type: "value_range"
+
+  - name: "Valid coverage months"
+    rule: "Coverage month columns must be between 0-12"
+    severity: "CRITICAL"
+    test_type: "value_range"
+
+  - name: "Valid categorical values"
+    rule: "Sex, Race, Chronic conditions must match valid_values"
+    severity: "CRITICAL"
+    test_type: "enum_check"
+
+  - name: "Realistic birth dates"
+    rule: "BENE_BIRTH_DT between 1900-01-01 and 2008-12-31"
+    severity: "WARNING"
+    test_type: "date_range"
+
+  - name: "No duplicate beneficiaries per year"
+    rule: "DESYNPUF_ID uniqueness by year"
+    severity: "CRITICAL"
+    test_type: "uniqueness"
+
+# Change Management
+version_history:
+  - version: "1.0.0"
+    date: "2024-10-01"
+    changes: "Initial schema definition"
+    breaking: false
+
+notification_policy:
+  breaking_changes_notice_days: 30
+  new_nullable_columns_notice_days: 0
+  new_required_columns_notice_days: 14
+  deprecation_period_days: 14
+
+contacts:
+  owner_email: "ml-engineering@example.com"
+  data_engineer: "data-eng@example.com"
+  on_call: "oncall-ml@example.com"
