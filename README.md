@@ -2,9 +2,9 @@
 
 Production-ready feature engineering pipeline for Medicare inpatient claim prediction, emphasizing point-in-time correctness and leakage prevention.
 
-**Status:** Ready for deployment  
-**Last Updated:** 2024-10-01  
-**Owner:** ML Engineering Team
+**Status:** Ready for review  
+**Last Updated:** 2026-01-10  
+**Owner:** ML Engineering Team 
 
 ---
 
@@ -149,6 +149,8 @@ feature_pipeline/
 │   ├── raw/                     # Input CSV files (gitignored)
 │   └── processed/               # Output features (gitignored)
 │
+├── SCHEMA_EVOLUTION_EXAMPLE.md
+├── SCHEMA_STRATEGY.md
 ├── DESIGN_NOTES.md              # Technical design & leakage analysis
 ├── README.md                     # This file
 ├── requirements.txt              # Python dependencies

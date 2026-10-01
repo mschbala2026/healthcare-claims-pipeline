@@ -1,207 +1,265 @@
-# Schema Evolution Handling
+# Schema Evolution Examples
 
-This document demonstrates how the feature pipeline handles schema changes and breaking changes in upstream data.
+This document shows how the pipeline handles schema changes when data structures evolve over time.
 
----
+## Scenario 1: Renamed Column
 
-## Scenario 1: Column Rename
-
-**Change:** BENE_SEX_IDENT_CD → BENE_GENDER_CD
-
-**Problem:**
-- Old code expects `BENE_SEX_IDENT_CD`
-- New data provides `BENE_GENDER_CD`
-- Pipeline crashes with KeyError
-
-**Solution (in feature_generator.py):**
-```python
-def _compute_beneficiary_features(self, bene_df, feature_date):
-    # Handle column rename: BENE_SEX_IDENT_CD → BENE_GENDER_CD
-    sex_col = 'BENE_GENDER_CD' if 'BENE_GENDER_CD' in bene_df.columns else 'BENE_SEX_IDENT_CD'
-    result['sex_male'] = (bene_df[sex_col] == 1).astype(int) if sex_col in bene_df.columns else 0
+**Old Schema (2008-2009):**
+```yaml
+columns:
+  CLM_ID: integer  # Claim identifier
+  CLM_ADMSN_DT: string  # Admission date
 ```
 
-**Feature Versioning:**
-- Old pipelines produce: `sex_male` from `BENE_SEX_IDENT_CD`
-- New pipelines produce: `sex_male` from `BENE_GENDER_CD` (semantically identical)
-- Output feature name unchanged → downstream consumers unaffected
-- Schema evolution is transparent at feature level
+**New Schema (2010+):**
+```yaml
+columns:
+  CLAIM_ID: integer  # Renamed from CLM_ID
+  CLM_ADMSN_DT: string  # Unchanged
+```
+
+**How to Handle:**
+```python
+# In schema_validator.py, add migration logic
+def _migrate_column_rename(df):
+    if 'CLM_ID' in df.columns and 'CLAIM_ID' not in df.columns:
+        df.rename(columns={'CLM_ID': 'CLAIM_ID'}, inplace=True)
+        logger.warning("Migrating CLM_ID → CLAIM_ID (schema version 2.0)")
+    return df
+```
+
+**Contract Update:**
+```yaml
+metadata:
+  version: 2.0
+  breaking_changes:
+    - "CLM_ID renamed to CLAIM_ID in version 2.0"
+  migration:
+    old_column: CLM_ID
+    new_column: CLAIM_ID
+```
 
 ---
 
 ## Scenario 2: New Nullable Column
 
-**Change:** New optional column `BENE_DIABETES_SEVERITY` added (0=none, 1=controlled, 2=uncontrolled)
-
-**Problem:**
-- Historical data (2008-2010) has NULL for all rows
-- New data (2011+) has valid values
-- Must not break historical feature generation
-
-**Solution (in feature_generator.py):**
-```python
-# Old approach: direct access
-result['has_diabetes'] = (bene_df['SP_DIABETES'] == 1).astype(int) if 'SP_DIABETES' in bene_df.columns else 0
-
-# New approach: handle optional column with sensible default
-result['diabetes_severity'] = bene_df.get('BENE_DIABETES_SEVERITY', 0).fillna(0).astype(int)
-```
-
-**Data Contract Update (contracts/beneficiary_contract.yaml):**
+**Old Schema (2008-2009):**
 ```yaml
-# Old contract
 columns:
-  SP_DIABETES: [int, 1=yes 2=no]
-
-# New contract (backward compatible)
-columns:
-  SP_DIABETES: [int, 1=yes 2=no, required]
-  BENE_DIABETES_SEVERITY: [int, 0=none 1=controlled 2=uncontrolled, optional, new_2011]
+  DIAGNOSIS_PRIMARY: string  # ICD9 diagnosis code
 ```
 
-**Pipeline Behavior:**
-- Historical data (NULL values) → default to 0 (no severity tracked)
-- New data (valid values) → use actual severity
-- Same feature name, semantically compatible
-- Tests should verify both historical and current data work
+**New Schema (2010+):**
+```yaml
+columns:
+  DIAGNOSIS_PRIMARY: string  # Unchanged
+  DIAGNOSIS_SECONDARY: string  # New column (nullable)
+```
 
----
-
-## Scenario 3: Type Change (Breaking)
-
-**Change:** CLM_PMT_AMT changes from integer (cents) to decimal (dollars)
-
-**Problem:**
-- Old format: 300000 cents = $3,000
-- New format: 3000.00 dollars = $3,000
-- Features would scale 100x if not detected
-
-**Impact on Features:**
-- `total_cost_90d`, `total_cost_365d` values scale by 100x
-- Models trained on old scale fail on new scale
-- **Requires model retraining** and feature versioning
-
-**Solution (in feature_generator.py):**
+**How to Handle:**
 ```python
-def _compute_inpatient_features(self, claims_df, feature_date):
-    """Handle cost column type changes"""
+# In feature_generator.py, handle missing column gracefully
+def _extract_diagnosis_features(self, inp_df):
+    result = {}
     
-    # Detect data format by checking if most values > 10000 (likely cents)
-    sample_costs = claims_df['CLM_PMT_AMT'].dropna().head(100)
-    is_cents_format = (sample_costs > 10000).mean() > 0.8
+    if 'DIAGNOSIS_PRIMARY' in inp_df.columns:
+        result['has_primary_diagnosis'] = (inp_df['DIAGNOSIS_PRIMARY'] != '').astype(int)
     
-    if is_cents_format:
-        # Convert cents to dollars for consistency
-        cost_multiplier = 0.01
+    # New column - provide default if missing
+    if 'DIAGNOSIS_SECONDARY' in inp_df.columns:
+        result['has_secondary_diagnosis'] = (inp_df['DIAGNOSIS_SECONDARY'] != '').astype(int)
     else:
-        # Already in dollars
-        cost_multiplier = 1.0
+        result['has_secondary_diagnosis'] = 0  # Default: no secondary diagnosis
     
-    # Aggregate with multiplier
-    costs_by_bene = claims_90d.groupby('DESYNPUF_ID')['CLM_PMT_AMT'].sum() * cost_multiplier
+    return result
 ```
 
-**Feature Versioning:**
-```
-Feature Version 1.0: CLM_PMT_AMT in cents
-  - total_cost_90d: $0 - $100,000
-  - Models trained on this scale
-
-Feature Version 1.1: CLM_PMT_AMT in dollars (type change detected)
-  - Same feature name but different scale
-  - Triggers automatic schema migration
-  - Models must be retrained on new scale
-  - Old and new models cannot be mixed
-```
-
-**Data Contract:**
+**Contract Update:**
 ```yaml
-# Version 1.0
-CLM_PMT_AMT: [integer, cents, scale_factor=0.01]
-
-# Version 1.1 (breaking change)
-CLM_PMT_AMT: [decimal, dollars, scale_factor=1.0]
+inpatient_schema:
+  DIAGNOSIS_PRIMARY:
+    type: string
+    nullable: false
+    version_added: "1.0"
+  DIAGNOSIS_SECONDARY:
+    type: string
+    nullable: true
+    version_added: "2.0"
+    default: null
 ```
 
 ---
 
-## General Pattern: Defensive Column Access
+## Scenario 3: Type Change
 
-**All features use defensive column access:**
+**Old Schema (2008-2009):**
+```yaml
+columns:
+  NCH_BENE_IP_DDCTBL_AMT: integer  # Deductible amount in cents
+```
 
+**New Schema (2010+):**
+```yaml
+columns:
+  NCH_BENE_IP_DDCTBL_AMT: decimal  # Now precise decimal dollars
+```
+
+**How to Handle:**
 ```python
-# ❌ Risky - crashes if column missing
-result['has_diabetes'] = (bene_df['SP_DIABETES'] == 1).astype(int)
+# In _parse_amounts(), handle type conversion
+def _parse_amounts(self, df, column_name):
+    """Convert amounts to decimal dollars, handling old int format"""
+    
+    if df[column_name].dtype == 'int64':
+        # Old format: amounts in cents
+        return (df[column_name] / 100).astype('float64')
+    elif df[column_name].dtype == 'float64':
+        # New format: amounts in dollars
+        return df[column_name].astype('decimal')
+    else:
+        raise ValueError(f"Unexpected type for {column_name}: {df[column_name].dtype}")
+```
 
-# ✅ Safe - handles renamed/missing columns
-result['has_diabetes'] = (
-    bene_df['SP_DIABETES'] == 1
-).astype(int) if 'SP_DIABETES' in bene_df.columns else 0
-
-# ✅ Also safe - handles rename mapping
-sql_col = 'BENE_GENDER_CD' if 'BENE_GENDER_CD' in bene_df.columns else 'BENE_SEX_IDENT_CD'
-result['sex_male'] = (bene_df[sql_col] == 1).astype(int)
+**Contract Update:**
+```yaml
+NCH_BENE_IP_DDCTBL_AMT:
+  type: decimal
+  precision: 10
+  scale: 2
+  unit: "USD"
+  version_added: "1.0"
+  version_changed: "2.0"
+  change_note: "Changed from integer (cents) to decimal (dollars) in version 2.0"
 ```
 
 ---
 
-## Testing Schema Evolution
+## Scenario 4: New Categorical Value
 
-**Add to test_feature_generation.py:**
+**Old Schema (2008-2009):**
+```yaml
+BENE_SEX_IDENT_CD:
+  type: enum
+  values:
+    - 1  # Male
+    - 2  # Female
+```
 
+**New Schema (2010+):**
+```yaml
+BENE_SEX_IDENT_CD:
+  type: enum
+  values:
+    - 1  # Male
+    - 2  # Female
+    - 3  # Prefer not to say (NEW)
+```
+
+**How to Handle:**
 ```python
-def test_schema_evolution_column_rename():
-    """Verify pipeline handles renamed columns"""
-    bene_df = simple_beneficiary_data()
-    # Rename column
-    bene_df = bene_df.rename(columns={'BENE_SEX_IDENT_CD': 'BENE_GENDER_CD'})
+# In _validate_enum_values(), allow new values gracefully
+def validate_enum_values(self, df, column_name, allowed_values):
+    """Validate enum, log warning for new values"""
     
-    # Pipeline should still work
-    features = feature_generator.compute_features(
-        beneficiary_df=bene_df,
-        inpatient_df=simple_inpatient_data(),
-        feature_date='2009-06-30'
-    )
+    unique_values = df[column_name].unique()
+    unexpected = set(unique_values) - set(allowed_values)
     
-    # Feature should be computed despite rename
-    assert 'sex_male' in features.columns
-    assert not features['sex_male'].isna().all()
+    if unexpected:
+        # New values in data - log but don't fail
+        logger.warning(f"New values in {column_name}: {unexpected}")
+        return True  # Accept with warning
+    
+    return True
+```
 
-
-def test_schema_evolution_new_nullable_column():
-    """Verify new optional columns don't break pipeline"""
-    bene_df = simple_beneficiary_data()
-    # Add new column with NULL values
-    bene_df['BENE_DIABETES_SEVERITY'] = None
-    
-    features = feature_generator.compute_features(
-        beneficiary_df=bene_df,
-        inpatient_df=simple_inpatient_data(),
-        feature_date='2009-06-30'
-    )
-    
-    # Pipeline should handle NULL columns
-    assert len(features) == len(bene_df)
+**Contract Update:**
+```yaml
+BENE_SEX_IDENT_CD:
+  type: enum
+  values:
+    - 1  # Male
+    - 2  # Female
+    - 3  # Prefer not to say (added in 2.0)
+  allowed_values_version:
+    "1.0": [1, 2]
+    "2.0": [1, 2, 3]
 ```
 
 ---
 
-## Versioning Strategy
+## Schema Version Management
 
-**Files should include version tags:**
-```python
-# features/feature_generator.py
-__version__ = "1.0.0"
-FEATURES_SCHEMA_VERSION = "1.0"  # Changes when feature computation changes
-DATA_CONTRACTS_VERSION = "1.0"   # Changes when input schema changes
+All schema changes should be tracked in contracts:
+
+```yaml
+metadata:
+  schema_version: "2.0"
+  previous_version: "1.0"
+  
+version_history:
+  "1.0":
+    date: 2024-01-01
+    changes:
+      - "Initial schema"
+  
+  "2.0":
+    date: 2024-06-01
+    breaking_changes:
+      - "CLM_ID renamed to CLAIM_ID"
+    non_breaking_changes:
+      - "Added DIAGNOSIS_SECONDARY (nullable)"
+      - "Changed NCH_BENE_IP_DDCTBL_AMT type to decimal"
+      - "Added value 3 to BENE_SEX_IDENT_CD"
+    migration_required: true
+    migration_script: "scripts/migrate_v1_to_v2.py"
 ```
 
-**When to increment versions:**
-- FEATURES_SCHEMA_VERSION: Any change to feature computation logic (requires model retrain)
-- DATA_CONTRACTS_VERSION: Any change to input data contracts (may require mapping)
+---
 
-**On deployment:**
-- Pin feature version in metadata
-- Validate all consumers use compatible versions
-- Prevent silent schema mismatches
+## Testing Schema Changes
 
+```python
+# In test_feature_generation.py, add tests for schema evolution
+
+def test_renamed_column_migration():
+    """Test that renamed columns are handled correctly"""
+    # Old schema with CLM_ID
+    old_data = pd.DataFrame({'CLM_ID': [1, 2, 3]})
+    migrated = migrate_column_rename(old_data)
+    assert 'CLAIM_ID' in migrated.columns
+    assert migrated['CLAIM_ID'].tolist() == [1, 2, 3]
+
+def test_new_nullable_column():
+    """Test that new nullable columns default correctly"""
+    # Data without DIAGNOSIS_SECONDARY
+    data = pd.DataFrame({'DIAGNOSIS_PRIMARY': ['001', '002']})
+    features = extract_diagnosis_features(data)
+    assert features['has_secondary_diagnosis'] == 0
+
+def test_type_conversion():
+    """Test that type changes are handled correctly"""
+    # Old format: cents
+    old_data = pd.DataFrame({'NCH_BENE_IP_DDCTBL_AMT': [500, 1000]})  # 5.00, 10.00 dollars
+    amounts = parse_amounts(old_data, 'NCH_BENE_IP_DDCTBL_AMT')
+    assert amounts.tolist() == [5.0, 10.0]
+
+def test_new_enum_value():
+    """Test that new enum values are accepted with warning"""
+    # New value not in old schema
+    data = pd.DataFrame({'BENE_SEX_IDENT_CD': [1, 2, 3]})  # 3 is new
+    result = validate_enum_values(data, 'BENE_SEX_IDENT_CD', [1, 2])
+    assert result == True  # Accepted (with warning logged)
+```
+
+---
+
+## Summary
+
+Schema evolution is handled through:
+1. **Defensive coding** - Check for column existence before use
+2. **Versioned contracts** - Track changes in YAML schemas
+3. **Migration functions** - Explicit transformation logic
+4. **Logging** - Warn about unexpected values/types
+5. **Testing** - Verify each scenario works correctly
+
+This ensures the pipeline adapts gracefully as data structures change over time.
